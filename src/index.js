@@ -133,6 +133,7 @@ class Galaxystore {
             date_of_experience_epoch: null,
           },
         });
+        console.log(output);
       });
 
       i += 15;
