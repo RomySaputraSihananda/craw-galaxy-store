@@ -1,17 +1,63 @@
 import fs from "fs-extra";
 import strftime from "strftime";
 import crypto from "crypto";
+import xml2json from "xml2js";
 
 class Galaxystore {
   #BASE_URL = "https://galaxystore.samsung.com";
-  #appId;
-  constructor(appId) {
-    this.#appId = appId;
+  constructor() {
+    // this.#process("com.miHoYo.GI.samsung");
     this.#start();
   }
 
   async writeFile(outputFile, data) {
     await fs.outputFile(outputFile, JSON.stringify(data, null, 2));
+  }
+
+  async #start() {
+    const gameIds = await this.#getGame("Online Game", "G000047131");
+    gameIds.forEach(async (gameId) => {
+      this.#process(gameId);
+    });
+  }
+
+  async #getGame(categoryName, categoryID) {
+    return new Promise(async (res, rej) => {
+      const response = await fetch(
+        "https://galaxystore.samsung.com/storeserver/ods.as?id=categoryProductList2Notc",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/xml",
+            "X-country-channel-code": "id-odc",
+          },
+          body: `<?xml version="1.0" encoding="UTF-8"?>
+            <SamsungProtocol networkType="0" version2="0" lang="EN" openApiVersion="28" deviceModel="SM-G998B" storeFilter="themeDeviceModel=SM-G998B_TM||OTFVersion=8000000||gearDeviceModel=SM-G998B_SM-R800||gOSVersion=4.0.0" mcc="310" mnc="03" csc="MWD" odcVersion="9.9.30.9" version="6.5" filter="1" odcType="01" systemId="1604973510099" sessionId="10a4ee19e202011101104" logId="XXX" userMode="0">   
+            <request name="categoryProductList2Notc" id="2030" numParam="10" transactionId="10a4ee19e126"> 
+                <param name="imgWidth">135</param>
+                <param name="startNum">1</param>
+                <param name="imgHeight">135</param>
+                <param name="alignOrder">bestselling</param>
+                <param name="contentType">All</param>
+                <param name="endNum">500</param>
+                <param name="categoryName">${categoryName}</param>
+                <param name="categoryID">${categoryID}</param>
+                <param name="srcType">01</param>
+                <param name="status">0</param>
+            </request>
+            </SamsungProtocol>`,
+        }
+      );
+      let data;
+
+      xml2json.parseString(await response.text(), function (err, result) {
+        data = result.SamsungProtocol.response[0].list.map((e) => {
+          return e.value[17]._;
+        });
+      });
+
+      res(data);
+    });
   }
 
   async #getReviews(contentId, i) {
@@ -32,8 +78,8 @@ class Galaxystore {
     ];
   }
 
-  async #start() {
-    const response = await fetch(`${this.#BASE_URL}/api/detail/${this.#appId}`);
+  async #process(id) {
+    const response = await fetch(`${this.#BASE_URL}/api/detail/${id}`);
 
     const { DetailMain, appId, Screenshot, SellerInfo, commentListTotalCount } =
       await response.json();
@@ -142,4 +188,39 @@ class Galaxystore {
 }
 
 // new Galaxystore("com.nexon.bluearchivegalaxy");
-new Galaxystore("com.miHoYo.GI.samsung");
+new Galaxystore();
+
+// const response = await fetch(
+//   "https://galaxystore.samsung.com/storeserver/ods.as?id=categoryProductList2Notc",
+//   {
+//     method: "POST",
+//     headers: {
+//       "Content-Type": "application/xml",
+//       "X-country-channel-code": "id-odc",
+//     },
+//     body: `<?xml version="1.0" encoding="UTF-8"?>
+//       <SamsungProtocol networkType="0" version2="0" lang="EN" openApiVersion="28" deviceModel="SM-G998B" storeFilter="themeDeviceModel=SM-G998B_TM||OTFVersion=8000000||gearDeviceModel=SM-G998B_SM-R800||gOSVersion=4.0.0" mcc="310" mnc="03" csc="MWD" odcVersion="9.9.30.9" version="6.5" filter="1" odcType="01" systemId="1604973510099" sessionId="10a4ee19e202011101104" logId="XXX" userMode="0">
+//       <request name="categoryProductList2Notc" id="2030" numParam="10" transactionId="10a4ee19e126">
+//           <param name="imgWidth">135</param>
+//           <param name="startNum">1</param>
+//           <param name="imgHeight">135</param>
+//           <param name="alignOrder">bestselling</param>
+//           <param name="contentType">All</param>
+//           <param name="endNum">500</param>
+//           <param name="categoryName">Online Game</param>
+//           <param name="categoryID">G000047131</param>
+//           <param name="srcType">01</param>
+//           <param name="status">0</param>
+//       </request>
+//       </SamsungProtocol>`,
+//   }
+// );
+// let data;
+
+// xml2json.parseString(await response.text(), function (err, result) {
+//   data = result.SamsungProtocol.response[0].list.map((e) => {
+//     return e.value[17]._;
+//   });
+// });
+
+// console.log(data);
