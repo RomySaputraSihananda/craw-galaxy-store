@@ -2,6 +2,7 @@ import fs from "fs-extra";
 import strftime from "strftime";
 import crypto from "crypto";
 import xml2json from "xml2js";
+import fetch from "node-fetch";
 
 const bodies = [
   `<?xml version="1.0" encoding="UTF-8"?><SamsungProtocol networkType="0" version2="0" lang="EN" openApiVersion="28" deviceModel="SM-G998B" storeFilter="themeDeviceModel=SM-G998B_TM||OTFVersion=8000000||gearDeviceModel=SM-G998B_SM-R800||gOSVersion=4.0.0" mcc="450" mnc="00" csc="CPW" odcVersion="4.5.21.6" version="6.5" filter="1" odcType="01" systemId="1604973510099" sessionId="10a4ee19e202011101104" logId="XXX" userMode="0">
@@ -12,14 +13,14 @@ const bodies = [
       <param name="upLevelCategoryKeyword">Games</param>
     </request>
   </SamsungProtocol>`,
-  // `<?xml version="1.0" encoding="UTF-8"?><SamsungProtocol networkType="0" version2="0" lang="EN" openApiVersion="28" deviceModel="SM-G998B" storeFilter="themeDeviceModel=SM-G998B_TM||OTFVersion=8000000||gearDeviceModel=SM-G998B_SM-R800||gOSVersion=4.0.0" mcc="450" mnc="00" csc="CPW" odcVersion="4.5.21.6" version="6.5" filter="1" odcType="01" systemId="1604973510099" sessionId="10a4ee19e202011101104" logId="XXX" userMode="0">
-  //   <request name="normalCategoryList" id="2225" numParam="4" transactionId="10a4ee19e011">
-  //       <param name="needKidsCategoryYN">Y</param>
-  //       <param name="imgWidth">135</param>
-  //       <param name="imgHeight">135</param>
-  //       <param name="gameCateYN">N</param>
-  //   </request>
-  //   </SamsungProtocol>`,
+  `<?xml version="1.0" encoding="UTF-8"?><SamsungProtocol networkType="0" version2="0" lang="EN" openApiVersion="28" deviceModel="SM-G998B" storeFilter="themeDeviceModel=SM-G998B_TM||OTFVersion=8000000||gearDeviceModel=SM-G998B_SM-R800||gOSVersion=4.0.0" mcc="450" mnc="00" csc="CPW" odcVersion="4.5.21.6" version="6.5" filter="1" odcType="01" systemId="1604973510099" sessionId="10a4ee19e202011101104" logId="XXX" userMode="0">
+    <request name="normalCategoryList" id="2225" numParam="4" transactionId="10a4ee19e011">
+        <param name="needKidsCategoryYN">Y</param>
+        <param name="imgWidth">135</param>
+        <param name="imgHeight">135</param>
+        <param name="gameCateYN">N</param>
+    </request>
+    </SamsungProtocol>`,
 ];
 
 class Galaxystore {
@@ -65,7 +66,6 @@ class Galaxystore {
 
       for (const gameId of gameIds) {
         await this.#process(gameId);
-        // fs.appendFileSync("ids", gameId + "\n");
       }
     });
   }
@@ -132,7 +132,12 @@ class Galaxystore {
   }
 
   async #process(id) {
-    const response = await fetch(`${this.#BASE_URL}/api/detail/${id}`);
+    let response;
+    try {
+      response = await fetch(`${this.#BASE_URL}/api/detail/${id}`);
+    } catch (e) {
+      return;
+    }
 
     const {
       DetailMain,
@@ -270,5 +275,4 @@ class Galaxystore {
   }
 }
 
-// new Galaxystore("com.nexon.bluearchivegalaxy");
 new Galaxystore();
