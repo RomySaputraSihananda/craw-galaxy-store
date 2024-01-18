@@ -3,10 +3,29 @@ import strftime from "strftime";
 import crypto from "crypto";
 import xml2json from "xml2js";
 
+const bodies = [
+  `<?xml version="1.0" encoding="UTF-8"?><SamsungProtocol networkType="0" version2="0" lang="EN" openApiVersion="28" deviceModel="SM-G998B" storeFilter="themeDeviceModel=SM-G998B_TM||OTFVersion=8000000||gearDeviceModel=SM-G998B_SM-R800||gOSVersion=4.0.0" mcc="450" mnc="00" csc="CPW" odcVersion="4.5.21.6" version="6.5" filter="1" odcType="01" systemId="1604973510099" sessionId="10a4ee19e202011101104" logId="XXX" userMode="0">
+    <request name="normalCategoryList" id="2225" numParam="4" transactionId="10a4ee19e011">
+      <param name="needKidsCategoryYN">Y</param>
+      <param name="imgWidth">135</param>
+      <param name="imgHeight">135</param>
+      <param name="upLevelCategoryKeyword">Games</param>
+    </request>
+  </SamsungProtocol>`,
+  // `<?xml version="1.0" encoding="UTF-8"?><SamsungProtocol networkType="0" version2="0" lang="EN" openApiVersion="28" deviceModel="SM-G998B" storeFilter="themeDeviceModel=SM-G998B_TM||OTFVersion=8000000||gearDeviceModel=SM-G998B_SM-R800||gOSVersion=4.0.0" mcc="450" mnc="00" csc="CPW" odcVersion="4.5.21.6" version="6.5" filter="1" odcType="01" systemId="1604973510099" sessionId="10a4ee19e202011101104" logId="XXX" userMode="0">
+  //   <request name="normalCategoryList" id="2225" numParam="4" transactionId="10a4ee19e011">
+  //       <param name="needKidsCategoryYN">Y</param>
+  //       <param name="imgWidth">135</param>
+  //       <param name="imgHeight">135</param>
+  //       <param name="gameCateYN">N</param>
+  //   </request>
+  //   </SamsungProtocol>`,
+];
+
 class Galaxystore {
   #BASE_URL = "https://galaxystore.samsung.com";
+
   constructor() {
-    // this.#process("com.miHoYo.GI.samsung");
     this.#start();
   }
 
@@ -15,16 +34,43 @@ class Galaxystore {
   }
 
   async #start() {
-    const gameIds = await this.#getGame("Online Game", "G000047131");
-    // for (const gameId of gameIds) {
-    //   await this.#process(gameId);
-    // }
-    gameIds.forEach(async (gameId) => {
-      await this.#process(gameId);
+    const datas = [];
+    for (const body of bodies) {
+      const response = await fetch(
+        "https://galaxystore.samsung.com/storeserver/ods.as?id=normalCategoryList",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/xml",
+            "X-country-channel-code": "id-odc",
+          },
+          body,
+        }
+      );
+
+      xml2json.parseString(await response.text(), function (err, result) {
+        datas.push(
+          ...result.SamsungProtocol.response[0].list.map((e) => {
+            return {
+              [e.value[0].$.name]: e.value[0]._,
+              [e.value[2].$.name]: e.value[2]._,
+            };
+          })
+        );
+      });
+    }
+
+    datas.forEach(async (data) => {
+      const gameIds = await this.#getGame(data);
+
+      for (const gameId of gameIds) {
+        await this.#process(gameId);
+        // fs.appendFileSync("ids", gameId + "\n");
+      }
     });
   }
 
-  async #getGame(categoryName, categoryID) {
+  async #getGame({ categoryName, categoryID }) {
     return new Promise(async (res, rej) => {
       try {
         const response = await fetch(
@@ -88,10 +134,25 @@ class Galaxystore {
   async #process(id) {
     const response = await fetch(`${this.#BASE_URL}/api/detail/${id}`);
 
-    const { DetailMain, appId, Screenshot, SellerInfo, commentListTotalCount } =
-      await response.json();
-    const title = DetailMain.contentName;
+    const {
+      DetailMain,
+      appId,
+      Screenshot,
+      SellerInfo,
+      commentListTotalCount,
+      errCode,
+    } = await response.json();
+
+    if (errCode) return;
+
     const link = `${this.#BASE_URL}/detail/${appId}`;
+    const title = DetailMain.contentName;
+    console.log(
+      `[ ${response.status} ] [ ${response.headers.get(
+        "Content-Type"
+      )} ] try ${link}`
+    );
+
     const domain = this.#BASE_URL.split("/")[2];
 
     const log = {
@@ -211,38 +272,3 @@ class Galaxystore {
 
 // new Galaxystore("com.nexon.bluearchivegalaxy");
 new Galaxystore();
-
-// const response = await fetch(
-//   "https://galaxystore.samsung.com/storeserver/ods.as?id=categoryProductList2Notc",
-//   {
-//     method: "POST",
-//     headers: {
-//       "Content-Type": "application/xml",
-//       "X-country-channel-code": "id-odc",
-//     },
-//     body: `<?xml version="1.0" encoding="UTF-8"?>
-//       <SamsungProtocol networkType="0" version2="0" lang="EN" openApiVersion="28" deviceModel="SM-G998B" storeFilter="themeDeviceModel=SM-G998B_TM||OTFVersion=8000000||gearDeviceModel=SM-G998B_SM-R800||gOSVersion=4.0.0" mcc="310" mnc="03" csc="MWD" odcVersion="9.9.30.9" version="6.5" filter="1" odcType="01" systemId="1604973510099" sessionId="10a4ee19e202011101104" logId="XXX" userMode="0">
-//       <request name="categoryProductList2Notc" id="2030" numParam="10" transactionId="10a4ee19e126">
-//           <param name="imgWidth">135</param>
-//           <param name="startNum">1</param>
-//           <param name="imgHeight">135</param>
-//           <param name="alignOrder">bestselling</param>
-//           <param name="contentType">All</param>
-//           <param name="endNum">500</param>
-//           <param name="categoryName">Online Game</param>
-//           <param name="categoryID">G000047131</param>
-//           <param name="srcType">01</param>
-//           <param name="status">0</param>
-//       </request>
-//       </SamsungProtocol>`,
-//   }
-// );
-// let data;
-
-// xml2json.parseString(await response.text(), function (err, result) {
-//   data = result.SamsungProtocol.response[0].list.map((e) => {
-//     return e.value[17]._;
-//   });
-// });
-
-// console.log(data);
