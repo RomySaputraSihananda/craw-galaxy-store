@@ -25,6 +25,7 @@ const bodies = [
 
 class Galaxystore {
   #BASE_URL = "https://galaxystore.samsung.com";
+  #id_project = crypto.createHash("md5").update(this.#BASE_URL).digest("hex");
 
   constructor() {
     this.#start();
@@ -161,11 +162,15 @@ class Galaxystore {
     const domain = this.#BASE_URL.split("/")[2];
 
     const log = {
-      source: link,
+      Crawlling_time: strftime("%Y-%m-%d %H:%M:%S", new Date()),
+      id_project: this.#id_project,
+      project: "Data Intelegent",
+      source_name: title,
       total_data: 0,
-      total_data_berhasil_diproses: 0,
-      total_data_gagal_diproses: 0,
-      PIC: "romy",
+      total_success: 0,
+      total_failed: 0,
+      status: "Process",
+      assign: "romy",
     };
 
     let i = 1;
@@ -263,14 +268,30 @@ class Galaxystore {
               date_of_experience_epoch: null,
             },
           });
-          log.total_data_berhasil_diproses += 1;
+          log.total_success += 1;
         } catch (e) {
-          log.total_data_gagal_diproses += 1;
+          log.total_failed += 1;
+          await fs.appendFile(
+            "error.txt",
+            JSON.stringify({
+              crawling_time: strftime("%Y-%m-%d %H:%M:%S", new Date()),
+              id_project: this.#id_project,
+              project: "Data Intelegent",
+              source_name: app.title,
+              id: postIn.id_str,
+              process_name: "Crawling",
+              status: "error",
+              type_error: "ConnectionError",
+              detail_error: e,
+              assign: "romy",
+            }) + "\n"
+          );
         }
         console.log(output);
       });
       i += 15;
     }
+    log.status = "Done";
     await fs.appendFile("log.txt", JSON.stringify(log) + "\n");
   }
 }
