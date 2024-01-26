@@ -3,6 +3,8 @@ import strftime from "strftime";
 import crypto from "crypto";
 import xml2json from "xml2js";
 import fetch from "node-fetch";
+import { infoLog, updateLog, writeLog } from "./utils/logsio.js";
+import { uploadS3Json } from "./utils/upload-s3.js";
 
 const bodies = [
   `<?xml version="1.0" encoding="UTF-8"?><SamsungProtocol networkType="0" version2="0" lang="EN" openApiVersion="28" deviceModel="SM-G998B" storeFilter="themeDeviceModel=SM-G998B_TM||OTFVersion=8000000||gearDeviceModel=SM-G998B_SM-R800||gOSVersion=4.0.0" mcc="450" mnc="00" csc="CPW" odcVersion="4.5.21.6" version="6.5" filter="1" odcType="01" systemId="1604973510099" sessionId="10a4ee19e202011101104" logId="XXX" userMode="0">
@@ -31,7 +33,7 @@ class Galaxystore {
     this.#start();
   }
 
-  async writeFile(outputFile, data) {
+  async #writeFile(outputFile, data) {
     await fs.outputFile(outputFile, JSON.stringify(data, null, 2));
   }
 
@@ -39,7 +41,7 @@ class Galaxystore {
     const datas = [];
     for (const body of bodies) {
       const response = await fetch(
-        "https://galaxystore.samsung.com/storeserver/ods.as?id=normalCategoryList",
+        `${this.#BASE_URL}/storeserver/ods.as?id=normalCategoryList`,
         {
           method: "POST",
           headers: {
@@ -163,15 +165,66 @@ class Galaxystore {
 
     const log = {
       Crawlling_time: strftime("%Y-%m-%d %H:%M:%S", new Date()),
-      id_project: this.#id_project,
-      project: "Data Intelegent",
-      source_name: title,
+      id_project: null,
+      project: "Data Intelligence",
+      sub_project: "data review",
+      source_name: this.#BASE_URL.split("/")[2],
+      sub_source_name: DetailMain.contentName,
+      id_sub_source: appId,
       total_data: 0,
       total_success: 0,
       total_failed: 0,
       status: "Process",
       assign: "romy",
     };
+    writeLog(log);
+
+    const headers = {
+      link,
+      domain,
+      tag: link.split("/").slice(2),
+      crawling_time: strftime("%Y-%m-%d %H:%M:%S", new Date()),
+      crawling_time_epoch: Date.now(),
+      reviews_name: DetailMain.contentName,
+      description_reviews: DetailMain.contentDescription,
+      description_new_reviews: DetailMain.contentNewDescription,
+      publisher_reviews: DetailMain.sellerName,
+      publisher_info_reviews: {
+        seller_trade_name: SellerInfo.sellerTradeName,
+        representation: SellerInfo.representation,
+        seller_site: SellerInfo.sellerSite,
+        first_name: SellerInfo.firstName,
+        last_name: SellerInfo.lastName,
+        seller_number: SellerInfo.sellerNumber,
+        first_seller_address: SellerInfo.firstSellerAddress,
+        second_seller_address: SellerInfo.secondSellerAddress,
+
+        registration_number: SellerInfo.registrationNumber,
+        report_number: SellerInfo.reportNumber,
+      },
+      limit_age_reviews: parseInt(DetailMain.limitAgeCd),
+      size_in_mb_reviews: parseFloat(
+        DetailMain.contentBinarySize.replace(" MB", "")
+      ),
+      content_binary_version_reviews: DetailMain.contentBinaryVersion,
+      local_price_rp_reviews: parseInt(
+        DetailMain.localPrice.replace("Rp", "").replace(",", "")
+      ),
+      permissions_required_reviews: DetailMain.permissionList,
+      screenshots_reviews: Screenshot.scrnShtUrlList.map(
+        ({ originalScrnShtUrl }) => originalScrnShtUrl
+      ),
+      location_reviews: null,
+      category_reviews: "application",
+      total_reviews: parseInt(commentListTotalCount),
+      reviews_rating: {
+        total_rating: parseFloat(DetailMain.ratingNumber),
+        detail_total_rating: null,
+      },
+    };
+
+    let output = `data/${title}/${id}.json`;
+    this.#writeFile(output, headers);
 
     let i = 1;
     while (true) {
@@ -184,9 +237,9 @@ class Galaxystore {
         DetailMain.modifyDate
       );
 
-      reviews.forEach(async (review) => {
+      for (const review of reviews) {
         const id = crypto.randomUUID();
-        const output = `data/${title}/${id}.json`;
+        output = `data/${title}/${id}.json`;
 
         const [created_time, created_time_epoch] = this.#parseDate(
           review.createDate
@@ -196,52 +249,12 @@ class Galaxystore {
         );
 
         try {
-          await this.writeFile(output, {
-            link,
-            domain,
-            tag: link.split("/").slice(2),
-            crawling_time: strftime("%Y-%m-%d %H:%M:%S", new Date()),
-            crawling_time_epoch: Date.now(),
-            path_data_raw: `data/data_raw/data_review/${domain}/${title}/json/${id}.json`,
-            path_data_clean: `data/data_clean/data_review/${domain}/${title}/json/${id}.json`,
-            reviews_name: DetailMain.contentName,
+          const data = {
+            ...headers,
             modify_date_reviews,
             modify_date_epoch_reviews,
-            description_reviews: DetailMain.contentDescription,
-            description_new_reviews: DetailMain.contentNewDescription,
-            publisher_reviews: DetailMain.sellerName,
-            publisher_info_reviews: {
-              seller_trade_name: SellerInfo.sellerTradeName,
-              representation: SellerInfo.representation,
-              seller_site: SellerInfo.sellerSite,
-              first_name: SellerInfo.firstName,
-              last_name: SellerInfo.lastName,
-              seller_number: SellerInfo.sellerNumber,
-              first_seller_address: SellerInfo.firstSellerAddress,
-              second_seller_address: SellerInfo.secondSellerAddress,
-
-              registration_number: SellerInfo.registrationNumber,
-              report_number: SellerInfo.reportNumber,
-            },
-            limit_age_reviews: parseInt(DetailMain.limitAgeCd),
-            size_in_mb_reviews: parseFloat(
-              DetailMain.contentBinarySize.replace(" MB", "")
-            ),
-            content_binary_version_reviews: DetailMain.contentBinaryVersion,
-            local_price_rp_reviews: parseInt(
-              DetailMain.localPrice.replace("Rp", "").replace(",", "")
-            ),
-            permissions_required_reviews: DetailMain.permissionList,
-            screenshots_reviews: Screenshot.scrnShtUrlList.map(
-              ({ originalScrnShtUrl }) => originalScrnShtUrl
-            ),
-            location_reviews: null,
-            category_reviews: "application",
-            total_reviews: parseInt(commentListTotalCount),
-            reviews_rating: {
-              total_rating: parseFloat(DetailMain.ratingNumber),
-              detail_total_rating: null,
-            },
+            path_data_raw: `data/data_raw/data_review/${domain}/${title}/json/${id}.json`,
+            path_data_clean: `data/data_clean/data_review/${domain}/${title}/json/${id}.json`,
             detail_reviews: {
               username_reviews: review.loginId,
               image_reviews: null,
@@ -267,32 +280,21 @@ class Galaxystore {
               date_of_experience: null,
               date_of_experience_epoch: null,
             },
-          });
+          };
+
           log.total_success += 1;
+          infoLog(log, id, "success");
+          updateLog(log);
         } catch (e) {
           log.total_failed += 1;
-          await fs.appendFile(
-            "error.txt",
-            JSON.stringify({
-              crawling_time: strftime("%Y-%m-%d %H:%M:%S", new Date()),
-              id_project: this.#id_project,
-              project: "Data Intelegent",
-              source_name: app.title,
-              id: postIn.id_str,
-              process_name: "Crawling",
-              status: "error",
-              type_error: "ConnectionError",
-              detail_error: e,
-              assign: "romy",
-            }) + "\n"
-          );
+          infoLog(log, id, "error", e);
         }
         console.log(output);
-      });
+      }
       i += 15;
     }
     log.status = "Done";
-    await fs.appendFile("log.txt", JSON.stringify(log) + "\n");
+    updateLog(log);
   }
 }
 
